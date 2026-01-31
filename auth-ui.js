@@ -38,8 +38,18 @@ const AuthUIModule = (() => {
       startLoginBtn.addEventListener('click', (e) => {
         e.preventDefault();
         console.log('[Auth UI] start-login-btn clicked');
-        // Full page navigation – server will render login.html
-        window.location.href = '/login';
+        // Client-side navigation without page reload
+        if (typeof RoutingModule !== 'undefined' && RoutingModule.navigateTo) {
+          RoutingModule.navigateTo('login', false);
+          // Update browser history
+          try {
+            history.pushState({}, '', '/login');
+          } catch (err) {
+            console.warn('History API not available', err);
+          }
+        } else {
+          console.warn('[Auth UI] RoutingModule not available');
+        }
       });
     }
 
@@ -47,8 +57,18 @@ const AuthUIModule = (() => {
       startSignupBtn.addEventListener('click', (e) => {
         e.preventDefault();
         console.log('[Auth UI] start-signup-btn clicked');
-        // Full page navigation – server will render signup.html
-        window.location.href = '/signup';
+        // Client-side navigation without page reload
+        if (typeof RoutingModule !== 'undefined' && RoutingModule.navigateTo) {
+          RoutingModule.navigateTo('signup', false);
+          // Update browser history
+          try {
+            history.pushState({}, '', '/signup');
+          } catch (err) {
+            console.warn('History API not available', err);
+          }
+        } else {
+          console.warn('[Auth UI] RoutingModule not available');
+        }
       });
     }
 
@@ -104,14 +124,32 @@ const AuthUIModule = (() => {
     if (loginForgotBtn) {
       loginForgotBtn.addEventListener('click', (e) => {
         e.preventDefault();
-        showPage('page-forgot-password');
+        if (typeof RoutingModule !== 'undefined' && RoutingModule.navigateTo) {
+          RoutingModule.navigateTo('forgotPassword', false);
+          try {
+            history.pushState({}, '', '/forgot-password');
+          } catch (err) {
+            console.warn('History API not available', err);
+          }
+        } else {
+          showPage('page-forgot-password');
+        }
       });
     }
 
     if (loginSignupBtn) {
       loginSignupBtn.addEventListener('click', (e) => {
         e.preventDefault();
-        showPage('page-signup');
+        if (typeof RoutingModule !== 'undefined' && RoutingModule.navigateTo) {
+          RoutingModule.navigateTo('signup', false);
+          try {
+            history.pushState({}, '', '/signup');
+          } catch (err) {
+            console.warn('History API not available', err);
+          }
+        } else {
+          showPage('page-signup');
+        }
       });
     }
 
@@ -173,7 +211,16 @@ const AuthUIModule = (() => {
     if (signupLoginBtn) {
       signupLoginBtn.addEventListener('click', (e) => {
         e.preventDefault();
-        showPage('page-login');
+        if (typeof RoutingModule !== 'undefined' && RoutingModule.navigateTo) {
+          RoutingModule.navigateTo('login', false);
+          try {
+            history.pushState({}, '', '/login');
+          } catch (err) {
+            console.warn('History API not available', err);
+          }
+        } else {
+          showPage('page-login');
+        }
       });
     }
 
@@ -222,7 +269,16 @@ const AuthUIModule = (() => {
     if (forgotLoginBtn) {
       forgotLoginBtn.addEventListener('click', (e) => {
         e.preventDefault();
-        showPage('page-login');
+        if (typeof RoutingModule !== 'undefined' && RoutingModule.navigateTo) {
+          RoutingModule.navigateTo('login', false);
+          try {
+            history.pushState({}, '', '/login');
+          } catch (err) {
+            console.warn('History API not available', err);
+          }
+        } else {
+          showPage('page-login');
+        }
       });
     }
 
