@@ -2,6 +2,13 @@
   "version": 2,
   "buildCommand": "npm install",
   "devCommand": "npm start",
+  "functions": {
+    "server.js": {
+      "memory": 3008,
+      "maxDuration": 30,
+      "runtime": "nodejs18.x"
+    }
+  },
   "env": {
     "GROQ_API_KEY": "@groq_api_key",
     "GROQ_API_URL": "https://api.groq.com/openai/v1/chat/completions",
