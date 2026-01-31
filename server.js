@@ -202,6 +202,12 @@ Return an empty array if no tasks found. Return ONLY the JSON array, no other te
   }
 });
 
+// Catch-all route: serve index.html for client-side routing
+// This enables the SPA to handle routes like /journal, /tasks, etc.
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
+
 app.listen(PORT, () => {
   // eslint-disable-next-line no-console
   console.log(`Server listening on http://localhost:${PORT}`);

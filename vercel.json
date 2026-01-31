@@ -13,12 +13,6 @@
     "FIREBASE_APP_ID": "@firebase_app_id",
     "FIREBASE_MEASUREMENT_ID": "@firebase_measurement_id"
   },
-  "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
-    }
-  ],
   "headers": [
     {
       "source": "/api/(.*)",
@@ -46,12 +40,5 @@
         }
       ]
     }
-  ],
-  "functions": {
-    "api/**": {
-      "memory": 3008,
-      "maxDuration": 30,
-      "runtime": "nodejs18.x"
-    }
-  }
+  ]
 }
