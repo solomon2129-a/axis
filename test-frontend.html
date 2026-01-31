@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Test</title>
+</head>
+<body>
+  <script>
+    async function test() {
+      try {
+        const resp = await fetch("/api/grox", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt: "Test" }),
+        });
+        const data = await resp.json();
+        console.log("Success:", data);
+        document.body.innerText = JSON.stringify(data, null, 2);
+      } catch (err) {
+        console.error("Error:", err);
+        document.body.innerText = "Error: " + err.message;
+      }
+    }
+    test();
+  </script>
+</body>
+</html>

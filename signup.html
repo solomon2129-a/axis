@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>Axis – Sign Up</title>
+	<link rel="stylesheet" href="style.css" />
+	<!-- Firebase CDN (compat) -->
+	<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+	<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+	<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+</head>
+<body>
+	<div class="app">
+		<!-- Simple signup page – no intro animation -->
+		<div id="page-signup" class="page page-active" role="main" aria-label="Sign up page">
+			<div class="page-inner">
+				<div class="auth-card">
+					<div class="auth-header">
+						<h2>Sign Up</h2>
+					</div>
+					<form id="signup-form" class="auth-form">
+						<input type="text" id="signup-name" name="name" placeholder="Full Name" required />
+						<input type="email" id="signup-email" name="email" placeholder="Email" required />
+						<input type="password" id="signup-password" name="password" placeholder="Password" required />
+						<input type="password" id="signup-confirm" name="confirm" placeholder="Confirm Password" required />
+						<button type="submit" class="btn btn-primary">Create Account</button>
+					</form>
+					<div class="auth-links">
+						<button id="signup-login-btn" class="link-btn">Already have an account?</button>
+					</div>
+					<div id="signup-error" class="auth-error"></div>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<script src="firebase.js"></script>
+	<script src="auth.js"></script>
+	<script src="auth-ui.js"></script>
+	<script src="script.js"></script>
+</body>
+</html>

@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Axis - Make sense of your thoughts" />
+  <title>Axis</title>
+  <link rel="stylesheet" href="style.css" />
+  <!-- Firebase CDN (compat) -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+</head>
+<body>
+  <div class="app">
+    <!-- AXIS HEADER/LOGO (only visible on private pages) -->
+    <div class="axis-header" id="axis-header">
+      <button id="axis-logo-btn" class="axis-logo-btn" title="Menu">Axis</button>
+    </div>
+    
+    <!-- SIDEBAR MENU (for logged-in users) -->
+    <div class="sidebar" id="sidebar">
+      <button class="sidebar-close" id="sidebar-close">×</button>
+      <div class="sidebar-content">
+        <div id="sidebar-user-name" class="sidebar-user-name"></div>
+        <button id="settings-btn" class="sidebar-item">⚙️ Settings</button>
+      </div>
+    </div>
+    
+    <!-- SETTINGS MODAL -->
+    <div class="modal-overlay" id="settings-modal" style="display: none;">
+      <div class="settings-card">
+        <button class="modal-close" id="settings-close">×</button>
+        <div class="settings-header">
+          <p class="settings-title">Settings</p>
+        </div>
+        <div class="settings-body">
+          <div class="settings-item">
+            <label>Name</label>
+            <div class="settings-field">
+              <span id="settings-name-display"></span>
+              <button id="settings-name-edit" class="edit-icon" title="Edit name">✎</button>
+            </div>
+            <input type="text" id="settings-name-input" class="settings-input hidden" />
+            <button id="settings-name-save" class="settings-save hidden">Save</button>
+          </div>
+          <div class="settings-item">
+            <label>Email</label>
+            <div class="settings-field">
+              <span id="settings-email-display"></span>
+            </div>
+          </div>
+        </div>
+        <div class="settings-footer">
+          <button id="settings-logout-btn" class="btn btn-danger">Logout</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- JOURNAL HISTORY MODAL -->
+    <div class="modal-overlay" id="journal-history-modal" style="display: none;">
+      <div class="settings-card">
+        <button class="modal-close" id="journal-history-close">×</button>
+        <div class="settings-header">
+          <p class="settings-title">Journal History</p>
+        </div>
+        <div class="settings-body" id="journal-history-list" style="max-height: 400px; overflow-y: auto;">
+          <!-- Journal entries will be rendered here -->
+        </div>
+      </div>
+    </div>
+
+    <!-- COMPLETED TASKS MODAL -->
+    <div class="modal-overlay" id="completed-tasks-modal" style="display: none;">
+      <div class="settings-card">
+        <button class="modal-close" id="completed-tasks-close">×</button>
+        <div class="settings-header">
+          <p class="settings-title">✓ Completed Tasks</p>
+        </div>
+        <div class="settings-body" id="completed-tasks-list" style="max-height: 400px; overflow-y: auto;">
+          <!-- Completed tasks will be rendered here -->
+        </div>
+      </div>
+    </div>
+
+    <!-- PAGE: THOUGHT DUMP -->
+    <div id="page-journal" class="page page-active" role="main" aria-label="Thought Dump">
+      <div class="page-inner">
+        <div class="journal-card">
+          <div class="journal-body">
+            <textarea
+              id="journal-input"
+              class="journal-textarea"
+              placeholder="Dump your thoughts. Don't organize. Just write."
+              aria-label="Journal textarea"
+            ></textarea>
+          </div>
+
+          <div class="journal-footer">
+            <div class="status-bar">
+              <span id="status-message" class="status-text" aria-live="polite"></span>
+            </div>
+          </div>
+          <div class="button-center">
+            <button id="make-sense-btn" class="btn btn-primary" type="button">
+              Make Sense
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PAGE 2: TASKS -->
+    <div id="page-tasks" class="page" role="main" aria-label="Tasks page">
+      <div class="page-inner">
+        <div class="tasks-card">
+          <header class="tasks-header">
+            <div>
+              <h1 class="tasks-title">TASKS</h1>
+              <p class="tasks-meta" id="tasks-meta"></p>
+              <p style="margin-top: 8px; color: var(--text-secondary); font-size: 0.9rem;">
+                <span id="completed-count">0</span> completed
+              </p>
+            </div>
+          </header>
+
+          <div class="tasks-body">
+            <div id="tasks-container"></div>
+          </div>
+
+          <footer class="tasks-footer">
+          </footer>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FLOATING DOCK NAVIGATION -->
+  <div class="floating-dock">
+    <button class="dock-item active" data-page="journal" aria-label="Journal" title="Journal">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+      </svg>
+    </button>
+    <button class="dock-item" data-page="tasks" aria-label="Tasks" title="Tasks">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M9 11l3 3L22 4"></path>
+        <path d="M20 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h11"></path>
+      </svg>
+    </button>
+  </div>
+
+  <script src="firebase.js"></script>
+  <script src="auth.js"></script>
+  <script src="auth-ui.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>

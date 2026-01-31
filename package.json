@@ -1,0 +1,23 @@
+{
+  "name": "minimal-journal",
+  "version": "1.0.0",
+  "description": "A simple one-page journaling website using HTML, CSS, and JavaScript with localStorage.",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "serve-static": "npx serve ."
+  },
+  "keywords": [
+    "journal",
+    "localStorage",
+    "vanilla-js"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "dotenv": "^16.0.3",
+    "node-fetch": "^2.6.7"
+  }
+}
+

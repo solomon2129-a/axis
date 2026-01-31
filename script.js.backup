@@ -1,0 +1,747 @@
+/**
+ * AXIS — PRODUCTION-READY ARCHITECTURE
+ * 
+ * Modular structure with clear separation of concerns:
+ * - Storage: Persistence layer for journal and tasks
+ * - UI: Page navigation and DOM rendering
+ * - Tasks: Task state management with completion preservation
+ * - Groq: AI integration for task extraction
+ * 
+ * The key insight: Always preserve completion state when regenerating,
+ * using semantic text matching to find old tasks in new lists.
+ */
+
+console.log("[Axis] Script loaded successfully");
+
+// ============================================================================
+// SIMPLE AUTH CONTROLLER – decides which UI to show based on Firebase state
+// ============================================================================
+
+const SimpleAuthController = (() => {
+  let isAuthenticated = false;
+  let authLoading = true;
+  let currentUser = null;
+
+  // Helper: clear all .page elements from the .app container (preserves axis-header)
+  const clearPages = () => {
+    const appRoot = document.querySelector('.app');
+    if (!appRoot) return;
+    appRoot.querySelectorAll('.page').forEach((p) => {
+      if (p && p.parentNode) p.parentNode.removeChild(p);
+    });
+  };
+
+  // Show public UI (start + auth pages). Only start page is active initially.
+  const showPublic = () => {
+    console.log('[SimpleAuth] Rendering public UI');
+    clearPages();
+    const appRoot = document.querySelector('.app');
+    const axisHeader = appRoot?.querySelector('.axis-header');
+    const insertPoint = axisHeader?.nextSibling || appRoot?.firstChild;
+
+    const start = document.getElementById('page-start');
+    const login = document.getElementById('page-login');
+    const signup = document.getElementById('page-signup');
+    const forgot = document.getElementById('page-forgot-password');
+
+    if (start && insertPoint) {
+      insertPoint.parentNode.insertBefore(start, insertPoint);
+      start.classList.add('page-active');
+    }
+    if (login && insertPoint) insertPoint.parentNode.insertBefore(login, insertPoint);
+    if (signup && insertPoint) insertPoint.parentNode.insertBefore(signup, insertPoint);
+    if (forgot && insertPoint) insertPoint.parentNode.insertBefore(forgot, insertPoint);
+
+    // Hide floating dock
+    const dock = document.querySelector('.floating-dock');
+    if (dock) dock.style.display = 'none';
+
+    // Init UI handlers for auth pages
+    if (typeof AuthUIModule !== 'undefined' && AuthUIModule.init) AuthUIModule.init();
+  };
+
+  // Show private UI (journal + tasks). Journal is active by default.
+  const showPrivate = async () => {
+    console.log('[SimpleAuth] Rendering private UI');
+    clearPages();
+    const appRoot = document.querySelector('.app');
+    const axisHeader = appRoot?.querySelector('.axis-header');
+    const insertPoint = axisHeader?.nextSibling || appRoot?.firstChild;
+
+    const journal = document.getElementById('page-journal');
+    const tasks = document.getElementById('page-tasks');
+
+    if (journal && insertPoint) {
+      insertPoint.parentNode.insertBefore(journal, insertPoint);
+      journal.classList.add('page-active');
+    }
+    if (tasks && insertPoint) insertPoint.parentNode.insertBefore(tasks, insertPoint);
+
+    // Show floating dock
+    const dock = document.querySelector('.floating-dock');
+    if (dock) dock.style.display = 'flex';
+
+    // Load user data from Firestore (if available)
+    try {
+      if (typeof AuthModule.loadJournal === 'function') {
+        const text = await AuthModule.loadJournal(currentUser.uid);
+        const ta = document.getElementById('journal-input');
+        if (ta && typeof text === 'string') {
+          ta.value = text;
+          StorageModule.saveJournalDraft(text);
+        }
+      }
+      if (typeof AuthModule.loadTasks === 'function') {
+        const tasksData = await AuthModule.loadTasks(currentUser.uid);
+        if (tasksData) {
+          TasksModule.setState(tasksData);
+          StorageModule.saveTasks(tasksData);
+          TasksModule.render(tasksData);
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to load Firestore data', e);
+    }
+
+    // Init UI for private app (dock navigation already wired in script.js)
+    if (typeof AuthUIModule !== 'undefined' && AuthUIModule.init) AuthUIModule.init();
+    // Update user info in menu
+    const userInfo = document.getElementById('user-info');
+    if (userInfo) userInfo.textContent = `👤 ${currentUser.email}`;
+  };
+
+  // Firebase auth state listener
+  const handleAuthChange = async (user) => {
+    authLoading = true;
+    if (user) {
+      isAuthenticated = true;
+      currentUser = user;
+      await showPrivate();
+    } else {
+      isAuthenticated = false;
+      currentUser = null;
+      showPublic();
+    }
+    authLoading = false;
+  };
+
+  const init = async () => {
+    if (!window || !window.firebaseReady) {
+      console.warn('Firebase not ready');
+      authLoading = false;
+      showPublic();
+      return;
+    }
+    try {
+      await window.firebaseReady;
+      if (window.firebaseAuth && window.firebaseDb) {
+        if (typeof AuthModule !== 'undefined' && AuthModule.init) {
+          AuthModule.init(window.firebaseAuth, window.firebaseDb);
+        }
+        if (typeof AuthModule !== 'undefined' && AuthModule.onAuthStateChange) {
+          AuthModule.onAuthStateChange(handleAuthChange);
+        }
+      } else {
+        console.warn('Firebase auth/db missing');
+        authLoading = false;
+        showPublic();
+      }
+    } catch (e) {
+      console.error('Firebase init error', e);
+      authLoading = false;
+      showPublic();
+    }
+  };
+
+  return { init };
+})();
+
+// Initialize simple auth controller on DOM ready
+document.addEventListener('DOMContentLoaded', () => {
+  SimpleAuthController.init();
+});
+
+// ============================================================================
+// STORAGE MODULE — Manage journal drafts and task persistence
+// ============================================================================
+
+const StorageModule = (() => {
+  const KEYS = {
+    JOURNAL_DRAFT: "axis.journal.v2",
+    TASKS: "axis.tasks.v2",
+  };
+
+  return {
+    // Journal persistence (single string)
+    getJournalDraft() {
+      return localStorage.getItem(KEYS.JOURNAL_DRAFT) || "";
+    },
+
+    saveJournalDraft(text) {
+      localStorage.setItem(KEYS.JOURNAL_DRAFT, text);
+    },
+
+    // Tasks persistence (structured: { today: [], overall: [] })
+    getTasks() {
+      try {
+        const data = localStorage.getItem(KEYS.TASKS);
+        return data ? JSON.parse(data) : { today: [], overall: [] };
+      } catch {
+        return { today: [], overall: [] };
+      }
+    },
+
+    saveTasks(tasks) {
+      localStorage.setItem(KEYS.TASKS, JSON.stringify(tasks));
+    },
+
+    // Clear everything (useful for reset)
+    clear() {
+      localStorage.removeItem(KEYS.JOURNAL_DRAFT);
+      localStorage.removeItem(KEYS.TASKS);
+    },
+  };
+})();
+
+// ============================================================================
+// DOM MODULE — Query and update UI elements
+// ============================================================================
+
+const DOMModule = (() => {
+  // Cache DOM references for performance
+  const cache = {};
+
+  const getElement = (id) => {
+    if (!cache[id]) {
+      cache[id] = document.getElementById(id);
+    }
+    return cache[id];
+  };
+
+  return {
+    // Pages
+    getJournalPage() {
+      return getElement("page-journal");
+    },
+
+    getTasksPage() {
+      return getElement("page-tasks");
+    },
+
+    // Journal page
+    getJournalTextarea() {
+      return getElement("journal-input");
+    },
+
+    getStatusMessage() {
+      return getElement("status-message");
+    },
+
+    getMakeSenseButton() {
+      return getElement("make-sense-btn");
+    },
+
+    // Tasks page
+    getBackButton() {
+      return getElement("back-btn");
+    },
+
+    getRegenerateButton() {
+      return getElement("regenerate-btn");
+    },
+
+    getTasksContainer() {
+      return getElement("tasks-container");
+    },
+
+    getTasksMeta() {
+      return getElement("tasks-meta");
+    },
+  };
+})();
+
+// ============================================================================
+// TEXT MATCHING MODULE — Semantic matching for task deduplication
+// ============================================================================
+
+const TextMatchingModule = (() => {
+  /**
+   * Normalize text for comparison:
+   * - Lowercase for case-insensitive matching
+   * - Remove special characters
+   * - Collapse whitespace
+   * 
+   * Example: "Buy Milk!" → "buy milk"
+   */
+  function normalizeText(text) {
+    return text
+      .toLowerCase()
+      .trim()
+      .replace(/[^\w\s]/g, "")
+      .replace(/\s+/g, " ");
+  }
+
+  /**
+   * Find old task that matches new task text
+   * Uses multiple strategies:
+   * 1. Exact normalized match
+   * 2. Substring containment
+   * 
+   * Returns the old task object or null if no match
+   */
+  function findMatch(newTaskText, oldTasks) {
+    const newNorm = normalizeText(newTaskText);
+
+    for (const oldTask of oldTasks) {
+      const oldNorm = normalizeText(oldTask.text);
+
+      // Exact match after normalization
+      if (oldNorm === newNorm) {
+        return oldTask;
+      }
+
+      // One-directional containment (handles slight wording changes)
+      if (
+        oldNorm.includes(newNorm) || 
+        newNorm.includes(oldNorm)
+      ) {
+        return oldTask;
+      }
+    }
+
+    return null;
+  }
+
+  return {
+    normalizeText,
+    findMatch,
+  };
+})();
+
+// ============================================================================
+// TASKS MODULE — Task state management and UI rendering
+// ============================================================================
+
+const TasksModule = (() => {
+  let currentState = { today: [], overall: [] };
+
+  /**
+   * Preserve completion state from old tasks in new task list
+   * 
+   * When regenerating, match old tasks to new tasks and preserve
+   * their "completed" status. This ensures user's progress isn't lost.
+   * 
+   * Algorithm:
+   * 1. Flatten all old tasks
+   * 2. For each new task, find matching old task
+   * 3. Keep old completion state or default to false if new
+   */
+  function mergeWithOldState(newTasks, oldTasks) {
+    // Flatten old tasks for easier lookup
+    const allOldTasks = [
+      ...(oldTasks.today || []),
+      ...(oldTasks.overall || []),
+    ];
+
+    // Process each category
+    const processCategory = (newList) => {
+      return newList.map((taskText) => {
+        const oldTask = TextMatchingModule.findMatch(taskText, allOldTasks);
+        return {
+          id: oldTask?.id || `task-${Date.now()}-${Math.random()}`,
+          text: taskText,
+          completed: oldTask?.completed || false,
+        };
+      });
+    };
+
+    return {
+      today: processCategory(newTasks.today || []),
+      overall: processCategory(newTasks.overall || []),
+    };
+  }
+
+  /**
+   * Render a single task section (e.g., "Today's Goals")
+   */
+  function renderSection(title, tasks) {
+    const section = document.createElement("div");
+    section.className = "task-section";
+
+    // Title
+    const titleEl = document.createElement("div");
+    titleEl.className = "task-section-title";
+    titleEl.textContent = title;
+    section.appendChild(titleEl);
+
+    // Empty state
+    if (tasks.length === 0) {
+      const emptyEl = document.createElement("div");
+      emptyEl.className = "tasks-empty";
+      emptyEl.textContent = "No goals in this category";
+      section.appendChild(emptyEl);
+      return section;
+    }
+
+    // Task list
+    const listEl = document.createElement("ul");
+    listEl.className = "task-list";
+
+    for (const task of tasks) {
+      const itemEl = document.createElement("li");
+      itemEl.className = "task-item";
+
+      // Checkbox
+      const checkboxEl = document.createElement("input");
+      checkboxEl.type = "checkbox";
+      checkboxEl.className = "task-checkbox";
+      checkboxEl.checked = task.completed;
+      checkboxEl.id = task.id;
+
+      // Label/text
+      const labelEl = document.createElement("label");
+      labelEl.htmlFor = task.id;
+      labelEl.className = "task-text";
+      labelEl.textContent = task.text;
+
+      // Handle checkbox changes (persist to storage and Firestore)
+      checkboxEl.addEventListener("change", () => {
+        task.completed = checkboxEl.checked;
+        labelEl.classList.toggle("task-completed", task.completed);
+        StorageModule.saveTasks(currentState);
+
+        // Also save to Firestore if logged in
+        try {
+          const user = (typeof AuthModule !== 'undefined' && AuthModule.getCurrentUser) ? AuthModule.getCurrentUser() : null;
+          if (user && typeof AuthModule.saveTasks === 'function') {
+            AuthModule.saveTasks(user.uid, currentState).catch(() => {});
+          }
+        } catch (e) {
+          // ignore
+        }
+      });
+
+      // Visual state for completed tasks
+      if (task.completed) {
+        labelEl.classList.add("task-completed");
+      }
+
+      itemEl.appendChild(checkboxEl);
+      itemEl.appendChild(labelEl);
+      listEl.appendChild(itemEl);
+    }
+
+    section.appendChild(listEl);
+    return section;
+  }
+
+  /**
+   * Full render of tasks page
+   */
+  function render(tasks) {
+    const container = DOMModule.getTasksContainer();
+    container.innerHTML = "";
+
+    // Show generation time
+    const meta = DOMModule.getTasksMeta();
+    if (meta) {
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString(undefined, {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+      meta.textContent = `Generated ${timeStr}`;
+    }
+
+    // Handle empty state
+    if (!tasks.today.length && !tasks.overall.length) {
+      container.innerHTML =
+        '<div class="tasks-empty">No goals yet. Start by journaling.</div>';
+      return;
+    }
+
+    // Render sections
+    container.appendChild(renderSection("Today's Goals", tasks.today));
+    container.appendChild(renderSection("Overall Goals", tasks.overall));
+  }
+
+  return {
+    getState: () => currentState,
+    setState: (tasks) => {
+      currentState = tasks;
+    },
+    mergeWithOldState,
+    render,
+  };
+})();
+
+// ============================================================================
+// GROQ MODULE — AI integration for task extraction
+// ============================================================================
+
+const GroqModule = (() => {
+  /**
+   * Call backend to generate tasks from journal text
+   * 
+   * Backend (server.js) handles:
+   * - Sending to Groq API
+   * - System prompt with JSON enforcement
+   * - Error handling and retries
+   * 
+   * Returns: { success: boolean, tasks: { today: [], overall: [] } }
+   */
+  async function generateTasks(journalText) {
+    const resp = await fetch("/api/grox", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt: journalText }),
+    });
+
+    if (!resp.ok) {
+      const errData = await resp.json();
+      throw new Error(errData.error || `HTTP ${resp.status}`);
+    }
+
+    const data = await resp.json();
+    if (!data?.success || !data?.tasks) {
+      throw new Error("Invalid response structure");
+    }
+
+    return data.tasks;
+  }
+
+  return {
+    generateTasks,
+  };
+})();
+
+// ============================================================================
+// UI MODULE — Page navigation and state updates
+// ============================================================================
+
+const UIModule = (() => {
+  let statusTimeout = null;
+
+  /**
+   * Display status message with optional auto-clear
+   */
+  function setStatus(message, options = {}) {
+    const statusEl = DOMModule.getStatusMessage();
+    if (!statusEl) return;
+
+    statusEl.textContent = message;
+    statusEl.classList.toggle("success", !!options.isSuccess);
+
+    // Auto-clear after delay
+    if (options.clearAfter) {
+      clearTimeout(statusTimeout);
+      statusTimeout = setTimeout(() => {
+        statusEl.textContent = "";
+      }, options.clearAfter);
+    }
+  }
+
+  /**
+   * Navigate between private pages (journal/tasks)
+   */
+  function navigateToPage(pageName) {
+    // Hide all private pages
+    document.getElementById('page-journal')?.classList.remove('page-active');
+    document.getElementById('page-tasks')?.classList.remove('page-active');
+
+    // Show target page
+    const targetPage = document.getElementById(`page-${pageName}`);
+    if (targetPage) {
+      targetPage.classList.add('page-active');
+      updateDockActiveState(pageName);
+
+      // Render tasks if navigating to tasks page
+      if (pageName === 'tasks') {
+        TasksModule.render(TasksModule.getState());
+      }
+    }
+  }
+
+  /**
+   * Toggle between journal and tasks pages
+   */
+  function handlePageToggle(pageName) {
+    navigateToPage(pageName);
+  }
+
+  /**
+   * Update which dock item is active
+   */
+  function updateDockActiveState(pageName) {
+    document.querySelectorAll(".dock-item").forEach((item) => {
+      item.classList.remove("active");
+    });
+    const activeItem = document.querySelector(`[data-page="${pageName}"]`);
+    if (activeItem) {
+      activeItem.classList.add("active");
+    }
+  }
+
+  /**
+   * Internal function to generate tasks from journal text
+   * Used by both handleMakeSense and handleRegenerate
+   */
+  async function generateAndDisplayTasks(journalText, fromMakeSense = true) {
+    // Validation
+    if (!journalText.trim()) {
+      setStatus("Write something first.", { clearAfter: 2000 });
+      return;
+    }
+
+    // Save draft
+    StorageModule.saveJournalDraft(journalText);
+
+    // Also save journal to Firestore if logged in
+    try {
+      const user = (typeof AuthModule !== 'undefined' && AuthModule.getCurrentUser) ? AuthModule.getCurrentUser() : null;
+      if (user && typeof AuthModule.saveJournal === 'function') {
+        AuthModule.saveJournal(user.uid, journalText).catch(() => {});
+      }
+    } catch (e) {
+      // ignore
+    }
+
+    // Disable appropriate button and show loading
+    const btn = fromMakeSense ? DOMModule.getMakeSenseButton() : DOMModule.getRegenerateButton();
+    if (btn) btn.disabled = true;
+    setStatus("Generating goals…");
+
+    try {
+      // Generate tasks from Groq
+      const newTasks = await GroqModule.generateTasks(journalText);
+
+      // Preserve completion state from old tasks
+      const oldTasks = StorageModule.getTasks();
+      const mergedTasks = TasksModule.mergeWithOldState(newTasks, oldTasks);
+
+      // Update state and persist
+      TasksModule.setState(mergedTasks);
+      StorageModule.saveTasks(mergedTasks);
+
+      // Also save tasks to Firestore if logged in
+      try {
+        const user = (typeof AuthModule !== 'undefined' && AuthModule.getCurrentUser) ? AuthModule.getCurrentUser() : null;
+        if (user && typeof AuthModule.saveTasks === 'function') {
+          AuthModule.saveTasks(user.uid, mergedTasks).catch(() => {});
+        }
+      } catch (e) {
+        // ignore
+      }
+
+      // Navigate to tasks page
+      setStatus("Goals ready. Moving to goals page…", { clearAfter: 800 });
+      setTimeout(() => {
+        navigateToPage("tasks");
+      }, 300);
+    } catch (err) {
+      console.error("[Axis] Task generation error:", err);
+      setStatus("Could not generate goals.", { clearAfter: 3000 });
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  /**
+   * Handle "Make Sense" button click
+   * 1. Save journal draft
+   * 2. Generate tasks via Groq
+   * 3. Merge with old state
+   * 4. Navigate to tasks page
+   */
+  async function handleMakeSense() {
+    const textarea = DOMModule.getJournalTextarea();
+    const journalText = textarea?.value || "";
+    await generateAndDisplayTasks(journalText, true);
+  }
+
+  /**
+   * Handle "Back" button
+   */
+  function handleBackToJournal() {
+    navigateToPage("journal");
+  }
+
+  /**
+   * Handle "Regenerate" button
+   * Reuse current journal text and generate new goals
+   */
+  async function handleRegenerate() {
+    const journalText = StorageModule.getJournalDraft();
+    if (!journalText.trim()) {
+      setStatus("No journal entry found.", { clearAfter: 2000 });
+      return;
+    }
+    // Use the internal function with the stored journal text
+    await generateAndDisplayTasks(journalText, false);
+  }
+
+  // Wire up floating dock navigation for private app (journal/tasks)
+  document.querySelectorAll('.dock-item').forEach((item) => {
+    item.addEventListener('click', (e) => {
+      e.preventDefault();
+      const pageName = item.getAttribute('data-page');
+      UIModule.handlePageToggle(pageName);
+    });
+  });
+
+  return {
+    setStatus,
+    navigateToPage,
+    handleMakeSense,
+    handleBackToJournal,
+    handleRegenerate,
+    handlePageToggle,
+    updateDockActiveState,
+  };
+})();
+
+// ============================================================================
+// INITIALIZATION — Wire up event listeners and load saved state
+// ============================================================================
+
+console.log("[Axis] Starting initialization...");
+
+document.addEventListener("DOMContentLoaded", () => {
+  console.log("[Axis] DOMContentLoaded fired");
+
+  // Restore journal draft from storage
+  const textarea = DOMModule.getJournalTextarea();
+  if (textarea) {
+    textarea.value = StorageModule.getJournalDraft();
+
+    // Auto-save draft on input (debounced)
+    let saveTimer;
+    textarea.addEventListener("input", () => {
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(() => {
+        StorageModule.saveJournalDraft(textarea.value);
+      }, 800);
+    });
+
+    // Keyboard shortcut: Cmd/Ctrl + Enter = Generate tasks
+    textarea.addEventListener("keydown", (event) => {
+      if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+        event.preventDefault();
+        UIModule.handleMakeSense();
+      }
+    });
+  }
+
+  // Wire up Make Sense button
+  const makeSenseBtn = DOMModule.getMakeSenseButton();
+  if (makeSenseBtn) {
+    makeSenseBtn.addEventListener("click", UIModule.handleMakeSense);
+  }
+
+  // Load and render any saved tasks
+  const savedTasks = StorageModule.getTasks();
+  TasksModule.setState(savedTasks);
+  TasksModule.render(savedTasks);
+  // Initialize root auth controller (mounts public or private flow)
+  // SimpleAuthController is initialized earlier in DOMContentLoaded
+});

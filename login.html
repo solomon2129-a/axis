@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Axis – Login</title>
+  <link rel="stylesheet" href="style.css" />
+  <!-- Firebase CDN (compat) -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+</head>
+<body>
+  <div class="app">
+    <!-- Simple login page – no intro animation -->
+    <div id="page-login" class="page page-active" role="main" aria-label="Login page">
+      <div class="page-inner">
+        <div class="auth-card">
+          <div class="auth-header">
+            <h2>Login</h2>
+          </div>
+          <form id="login-form" class="auth-form">
+            <input type="email" id="login-email" name="email" placeholder="Email" required />
+            <input type="password" id="login-password" name="password" placeholder="Password" required />
+            <button type="submit" class="btn btn-primary">Sign In</button>
+          </form>
+          <div class="auth-links">
+            <button id="login-forgot-btn" class="link-btn">Forgot password?</button>
+            <button id="login-signup-btn" class="link-btn">Create account</button>
+          </div>
+          <div id="login-error" class="auth-error"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="firebase.js"></script>
+  <script src="auth.js"></script>
+  <script src="auth-ui.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
